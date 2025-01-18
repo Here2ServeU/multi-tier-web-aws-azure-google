@@ -1,4 +1,3 @@
-
 # Automated Multi-Cloud Deployment Project
 
 ## Project Overview
@@ -279,6 +278,195 @@ jobs:
     - name: Terraform Apply
       run: terraform apply -auto-approve -var-file=terraform.tfvars
 ```
+
+---
+
+## Steps to Use AWS Secrets Manager, Azure Key Vault, and Google Cloud Secrets Manager
+
+### 1. AWS Secrets Manager
+
+#### Step 1: Create a Secret
+1.	Go to the AWS Secrets Manager Console.
+
+2.	Click Store a new secret.
+
+3.	Choose the secret type:
+- Credentials (e.g., database username and password).
+
+4.	Enter the key-value pairs for the secret.
+
+5.	Select the encryption key (default AWS KMS or a custom KMS key).
+
+6.	Name the secret (e.g., db-credentials).
+
+7.	Finish and save the secret.
+
+#### Step 2: Access Secrets in Terraform
+
+- Add the following to the Terraform configuration:
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
+
+data "aws_secretsmanager_secret" "db_secret" {
+  name = "db-credentials"
+}
+
+data "aws_secretsmanager_secret_version" "db_secret_version" {
+  secret_id = data.aws_secretsmanager_secret.db_secret.id
+}
+
+output "db_credentials" {
+  value = jsondecode(data.aws_secretsmanager_secret_version.db_secret_version.secret_string)
+}
+```
+- Use jsondecode() to extract specific key-value pairs, such as username and password.
+
+#### Step 3: Secure Access
+
+1.	Assign appropriate IAM policies to the Terraform execution role.
+
+2.	Example policy:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-credentials"
+    }
+  ]
+}
+```
+
+### 2. Azure Key Vault
+
+#### Step 1: Create a Key Vault
+1.	Go to the Azure Portal.
+
+2.	Navigate to Key Vaults → + Create.
+
+3.	Configure:
+- Resource Group: Select or create one.
+- Vault Name: Example, key-vault-dev.
+- Region: Select a region.
+- Enable soft delete for recovery.
+
+#### Step 2: Add a Secret
+1.	Open the Key Vault.
+
+2.	Navigate to Secrets → + Generate/Import.
+
+3.	Enter:
+- Name: Example, db-credentials.
+- Value: Example, {"username":"admin", "password":"securepassword"}.
+
+4.	Save the secret.
+
+#### Step 3: Access Secrets in Terraform
+
+- Add the following to the Terraform configuration:
+```hcl
+provider "azurerm" {
+  features {}
+}
+
+data "azurerm_key_vault" "example" {
+  name                = "key-vault-dev"
+  resource_group_name = "your-resource-group"
+}
+
+data "azurerm_key_vault_secret" "db_secret" {
+  name         = "db-credentials"
+  key_vault_id = data.azurerm_key_vault.example.id
+}
+
+output "db_credentials" {
+  value = jsondecode(data.azurerm_key_vault_secret.db_secret.value)
+}
+```
+
+#### Step 4: Secure Access
+1.	Assign the Azure Key Vault Reader Role to the Terraform service principal.
+
+2.	Use the following CLI command:
+```bash
+az role assignment create --role "Key Vault Reader" --assignee <service-principal-id> --scope <key-vault-id>
+```
+
+### 3. Google Cloud Secrets Manager
+
+#### Step 1: Create a Secret
+1.	Go to the Google Cloud Console.
+
+2.	Navigate to Secrets Manager → + Create Secret.
+
+3.	Configure:
+- Name: Example, db-credentials.
+- Value: Example, {"username":"admin", "password":"securepassword"}.
+
+4.	Save the secret.
+
+#### Step 2: Access Secrets in Terraform
+
+- Add the following to the Terraform configuration:
+```hcl
+provider "google" {
+  project = "your-gcp-project-id"
+}
+
+data "google_secret_manager_secret" "db_secret" {
+  secret_id = "db-credentials"
+}
+
+data "google_secret_manager_secret_version" "db_secret_version" {
+  secret    = data.google_secret_manager_secret.db_secret.id
+  version   = "latest"
+}
+
+output "db_credentials" {
+  value = jsondecode(data.google_secret_manager_secret_version.db_secret_version.secret_data)
+}
+```
+
+#### Step 3: Secure Access
+1.	Assign the Secret Manager Accessor Role to the service account running Terraform.
+
+2.	Example command:
+```bash
+gcloud projects add-iam-policy-binding your-gcp-project-id \
+  --member="serviceAccount:your-service-account@your-project.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+### Pipeline Integration
+#### 1.	Store Terraform Variables Securely:
+- Pass the secrets as environment variables to the CI/CD pipeline.
+- Example in Jenkinsfile:
+```groovy
+environment {
+    DB_CREDENTIALS = credentials('aws-secrets-manager-id') // Use Jenkins credentials plugin
+}
+```
+
+- Example in GitHub Actions:
+```yml
+env:
+  DB_CREDENTIALS: ${{ secrets.AWS_DB_CREDENTIALS }}
+```
+
+#### 2.	Inject Secrets into Terraform:
+- Use Terraform variable files (terraform.tfvars) with placeholders for secret values.
+- Inject secrets at runtime via environment variables.
+
+### Key Considerations
+- IAM Roles: Ensure Terraform execution roles have the least privilege to access secrets.
+- Audit Logging: Enable logging for Secrets Manager, Key Vault, and GCP Secrets Manager to monitor access.
+- Versioning: Use secret versioning for rotation and rollback.
+
+--- 
 
 ## Clean up
 
