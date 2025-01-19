@@ -9,7 +9,7 @@ This project aims to create a fully automated pipeline to deploy a multi-tier we
 
 ## Features:
 - Reusable Terraform modules for managing resources across cloud providers.
-- Secure secrets management using AWS Secrets Manager and Azure Key Vault.
+- Secure secrets management using AWS Secrets Manager, Azure Key Vault, and Google Cloud Secret Manager.
 - Deployment pipeline using Jenkins or GitHub Actions.
 
 ---
